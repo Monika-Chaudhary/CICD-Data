@@ -223,7 +223,27 @@ node{
        echo "${stage_step}"
        EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
 
+       //parallel deployment with approval from people
        try{
+         /*
+         emailext to: 'MonikaChaudhary705@gmail; anotherMailId',    //approval people list
+         mimeType: 'text/html',
+         subject: "Approve: ${appName} code in Test Environments",
+         body: """<br>Dear Approver,</br>
+<br>Please approve build for Test Environments</br>
+<br>'''<a href="${BUILD_URL}input">Click to approve for Test Environments</a>'''</br>
+<br><br>Thanks & Regards,<br>
+Jenkins Administration""" 
+         */
+
+         def receipient='gitApprovalTeam'
+         DeploymentApproval(receipient, appName, BUILD_URL)
+
+         parallel(
+           "Stage SIT1A": {
+             
+           }
+         )
          
        }catch(Exception e){
             Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
