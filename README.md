@@ -10,4 +10,7 @@ Dynamically take url, branch and credentails from respective variables
 
 Add Jenkins file on same repo where txt present
 
+Create nightly and release pipeline/job separately on jenkins and sonar
+  Nightly -> 'Checkout', 'SAST analysis', 'JUnit Testing' and 'Compile and Build EAR' stage
+
 
