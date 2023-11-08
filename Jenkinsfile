@@ -74,9 +74,33 @@ node{
             EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
             error "Failed at 'SAST Analysis with SonarQube', exiting now..."
           }
-       }      
+       }  
+
+       stage('JUnit Testing'){
+          stage_step="${STAGE_NAME}"
+          try{
+             withEnv(['JAVA_HOME=pathToJDK']) {
+               sh '$JAVA_HOME/bin/java -version'
+               sh 'antPath -f $WORKSPACE/jacoco-build.xml'
+
+               junit skipPublishingChecks: true, testResults: '**/build/targetFolder/test-reports/*.xml'
+               publishCoverage adapters: [jacocoAdapter('build/targetFolder/site/jacoco/report.xml')], checksName: '', skipPublishingChecks: true, sourceFileResolver: sourceFiles('NEVER_STORE')
+               
+               withSonarQubeEnv('SonarQube'){
+                 withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
+                    sh "sonarScannerPath -e -Dsonar.host.url=IPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.tests=$WORKSPACE/test/ -Dsonar.java.test.libraries=$WORKSPACE/jacoco/lib -Dsonar.core.codeCoveragePlugin=jacoco -Dsonar.junit.reportPaths=$WORKSPACE/build/targetFolder/test-reports -Dsonar.coverage.jacoco.xmlReportPaths=$WORKSPACE/build/targetFolder/site/jacoco/report.xml"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                  }
+               }  
+             }
+          }catch(Exception e){
+            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+            build_status="FAILURE"
+            echo "${stage_step}"
+            EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+            error "Failed at 'JUnit Testing', exiting now..."
+          }
+       } 
                 
-      
   }catch(Exception e){
       
   }
