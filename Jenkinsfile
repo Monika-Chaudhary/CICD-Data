@@ -165,7 +165,7 @@ node{
 
             buildFileName =sh(returnStdout:true, script: """
                 source \$WORKSPACE/Depoly_Env_Name    //Depoly_Env_Name - this file contains env name of UCD in git
-                echo "\$envSpecificBuildFileNameVale"    // envSpecificBuildFileNameVale - variable which contains env specific build file name vale
+                echo "\$envSpecificBuildFileNameValue"    // envSpecificBuildFileNameVale - variable which contains env specific build file name vale
             """
             )
             buildFileName = buildFileName.trim()
@@ -241,9 +241,140 @@ Jenkins Administration"""
 
          parallel(
            "Stage SIT1A": {
-             
-           }
-         )
+             def env =sh(returnStdout:true, script: """
+                source \$WORKSPACE/Depoly_Env_Name    //Depoly_Env_Name - this file contains env name of UCD in git
+                echo "\$SIT1AEnvName"               // defaultEnvName - variable which contains env value of UCD
+             """
+             )
+             env = env.trim()
+             println(env)
+
+             def DeploymentEnvironment="SIT1A"
+             def UCDProcess="SUCCESS"
+             Approver=BUILD_USER_ID
+
+             stage("Deployment(${DeploymentEnvironment})"){
+               def inputuser=""
+               try{
+                 stage_step="${STAGE_NAME}"
+                 approvalMap= input id: 'Deploy_SIT1A', message: 'Please find approval for SIT1A', ok: 'Deploy'
+                 Approver=BUILD_USER_ID
+                 echo "Approved by ${Approver} in SIT1A"
+
+                buildFileName ="=sit1a"    // to distinguish upload comp based artifact as same comp not be uploaded to UCD
+
+                def comp_name="ucdCompName"
+                def applicationProcess="ucdAppProcess"
+                def earName="buildArtifact.ear"    //buildArtifact - name will be whatever build artifact mentio in build.xml file
+                def warName="buildArtifact.war"
+                def folderName="buildArtifact"
+
+                //change ear war name according to envs
+                sh'''
+                mv $WORKSPACE/build/target-EAR/buildArtifact*.ear $WORKSPACE/build/target-EAR/'''+earName+'''
+                mv $WORKSPACE/build/target-EAR/buildArtifact*.war $WORKSPACE/build/target-EAR/'''+warName+'''
+                '''
+                appDeploy(comp_name, env, earName, warName, folderName, applicationProcess, UCDProcess, buildFileName)    //appDeploy - function in shared library for reusability
+
+                echo "${Approver} is the current user in SIT1A"
+                Subject="Deployment Success : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment} approved by ${Approver}"
+                echo "${DeploymentEnvironment} deploy status : ${Deploy_status}"
+                EmailFunction(To, CC, Subject, appName, stage_step, build_status, DeploymentEnvironment)
+            }catch(Exception e){
+              Approver=BUILD_USER_ID
+              catchBlock(To, CC, Subject, appName, stage_step, build_status, e, DeploymentEnvironment, UCDProcess, Deploy_status, Approver, env)
+            } 
+          }
+          stage("${DeploymentEnvironment} Smoke Test"){
+            stage_step="${STAGE_NAME}"
+            try{
+
+              def comp_name="ucdCompName"
+              def applicationProcess="ucdAppProcess"
+              def wasSysOutLog="valueOfLogFilePath"     //wasSysOutLog - this variable update value in UCD comp variable according to env to trace system log for verification
+              def appTimerLog="valueOfTimerLogFilePath"     //appTimerLog - this variable update value in UCD comp variable according to env to trace timer log for verification
+
+              appSmoke(comp_name, wasSysOutLog, appTimerLog, applicationProcess, envName)    //appSmoke - function in shared library for reusability
+            }catch(Exception e){
+              Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+              build_status="FAILURE"
+              echo "${stage_step}"
+              EmailFunction(To, CC, Subject, appName, stage_step, build_status, DeploymentEnvironment)
+              error "Failed at '${deployEnv} Smoke Test', exiting now..."
+          }
+       },
+
+       "Stage SIT1B": {
+             def env =sh(returnStdout:true, script: """
+                source \$WORKSPACE/Depoly_Env_Name    //Depoly_Env_Name - this file contains env name of UCD in git
+                echo "\$SIT1BEnvName"               // defaultEnvName - variable which contains env value of UCD
+             """
+             )
+             env = env.trim()
+             println(env)
+
+             def DeploymentEnvironment="SIT1B"
+             def UCDProcess="SUCCESS"
+             Approver=BUILD_USER_ID
+
+             stage("Deployment(${DeploymentEnvironment})"){
+               def inputuser=""
+               try{
+                 stage_step="${STAGE_NAME}"
+                 approvalMap= input id: 'Deploy_SIT1B', message: 'Please find approval for SIT1B', ok: 'Deploy'
+                 Approver=BUILD_USER_ID
+                 echo "Approved by ${Approver} in SIT1B"
+
+                 buildFileName =sh(returnStdout:true, script: """    // to distinguish upload comp based artifact as same comp not be uploaded to UCD
+                   source \$WORKSPACE/Depoly_Env_Name    //Depoly_Env_Name - this file contains env name of UCD in git
+                   echo "\$SIT1BbuildFileName"    // envSpecificBuildFileNameVale - variable which contains env specific build file name vale
+                 """
+                 )
+                buildFileName = buildFileName.trim()
+                println(buildFileName)   
+
+                def comp_name="ucdCompName"
+                def applicationProcess="ucdAppProcess"
+                def earName="buildArtifact"+""+"${buildFileName}.ear"   //buildArtifact - name will be whatever build artifact mentio in build.xml file
+                def warName="buildArtifact"+""+"${buildFileName}.war"
+                def folderName="buildArtifact"+""+"${buildFileName}"
+
+                //change ear war name according to envs
+                sh'''
+                mv $WORKSPACE/build/target-EAR/buildArtifact*.ear $WORKSPACE/build/target-EAR/'''+earName+'''
+                mv $WORKSPACE/build/target-EAR/buildArtifact*.war $WORKSPACE/build/target-EAR/'''+warName+'''
+                '''
+                appDeploy(comp_name, env, earName, warName, folderName, applicationProcess, UCDProcess, buildFileName)    //appDeploy - function in shared library for reusability
+
+                echo "${Approver} is the current user in SIT1B"
+                Subject="Deployment Success : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment} approved by ${Approver}"
+                echo "${DeploymentEnvironment} deploy status : ${Deploy_status}"
+                EmailFunction(To, CC, Subject, appName, stage_step, build_status, DeploymentEnvironment)
+            }catch(Exception e){
+              Approver=BUILD_USER_ID
+              catchBlock(To, CC, Subject, appName, stage_step, build_status, e, DeploymentEnvironment, UCDProcess, Deploy_status, Approver, env)
+            } 
+          }
+          stage("${DeploymentEnvironment} Smoke Test"){
+            stage_step="${STAGE_NAME}"
+            try{
+
+              def comp_name="ucdCompName"
+              def applicationProcess="ucdAppProcess"
+              def wasSysOutLog="valueOfLogFilePath"     //wasSysOutLog - this variable update value in UCD comp variable according to env to trace system log for verification
+              def appTimerLog="valueOfTimerLogFilePath"     //appTimerLog - this variable update value in UCD comp variable according to env to trace timer log for verification
+
+              appSmoke(comp_name, wasSysOutLog, appTimerLog, applicationProcess, env)    //appSmoke - function in shared library for reusability
+            }catch(Exception e){
+              Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+              build_status="FAILURE"
+              echo "${stage_step}"
+              EmailFunction(To, CC, Subject, appName, stage_step, build_status, DeploymentEnvironment)
+              error "Failed at '${deployEnv} Smoke Test', exiting now..."
+          }
+         }
+       }
+      )
          
        }catch(Exception e){
             Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
