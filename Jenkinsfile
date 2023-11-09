@@ -1,3 +1,26 @@
+@Library('DevOpsSharedLib')_
+
+def catchBlock(To, CC, Subject, appName, stage_step, build_status, e, DeploymentEnvironment, UCDProcess, Deploy_status, Approver, env){
+  if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess="SUCCESS"){
+    echo "${Approver} has aborted in ${DeploymentEnvironment}"
+    Deploy_status="ABORTED"
+    Subject="Deployment Aborted by ${Approver} : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
+    echo "${DeploymentEnvironment} deploy status : Aborted"
+    EmailFunction(To, CC, Subject, appName, stage_step, Deploy_status, env)
+  }else if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess="FAILURE"){
+    Deploy_status="FAILURE"
+    Subject="Deployment FAILURE : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
+    echo "${DeploymentEnvironment} deploy status : Failed, current user is ${Approver}"
+    EmailFunction(To, CC, Subject, appName, stage_step, Deploy_status, env)
+  }else{
+    Deploy_status="FAILURE"
+    Subject="Deployment FAILURE : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
+    echo "${DeploymentEnvironment} deploy status : Failed, current user is ${Approver}"
+    EmailFunction(To, CC, Subject, appName, stage_step, Deploy_status, env)
+  }
+  throw e
+}
+
 node{
   def appName="sonarProjectKey"
   def To="gitTeamName;anotherTeamName"  //like To="appNotifierTeam;DevOpsTeam;appApproverTeam"
@@ -302,7 +325,8 @@ Jenkins Administration"""
               EmailFunction(To, CC, Subject, appName, stage_step, build_status, DeploymentEnvironment)
               error "Failed at '${deployEnv} Smoke Test', exiting now..."
           }
-       },
+       }
+      },
 
        "Stage SIT1B": {
              def env =sh(returnStdout:true, script: """
@@ -377,11 +401,7 @@ Jenkins Administration"""
       )
          
        }catch(Exception e){
-            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
-            build_status="FAILURE"
-            echo "${stage_step}"
-            EmailFunction(To, CC, Subject, appName, stage_step, build_status, deployEnv)
-            error "Failed at '${deployEnv} Smoke Test', exiting now..."
+           
        }
        finally{
          if(Deploy_status=="FAILURE"){
