@@ -1,4 +1,85 @@
 //get UCD EnvName
 def getEnvironmentName(deployEnvName){
+    if(deployEnvName=="envNameA" || deployEnvName=="envNameB"){
+        environment="envName1"
+    }
+    else if(deployEnvName=="envNameC" || deployEnvName=="envNameD"){
+        environment="envName2"
+    }else{
+        echo "Wrong Environment"
+    }
+    return environment
+}
 
+//deploy build artifacts in all envs automatically
+def getRegionsToDeploy(DeployEnvironmentlist){
+    return DeployEnvironmentlist.split(',')
+}
+
+def getDeployStages(DeployEnvironmentlist, earName, warName, UCDProcess, To, CC, Subject, appName, build_status, version_id, Deploy_status, deployRegion, auth){
+    return getRegionsToDeploy(DeployEnvironmentlist).collectEntries { region ->
+        [
+            (region): {
+                regionEnv="${region}".split(";")[0]
+                stage("Deploy region ${regionEnv}"){
+                    def deployenvRegion=""
+                    try{
+                        echo "${region}"
+                        deployenvRegion="${region}".split(";")[0]
+                        approvalMap=input(id: "${deployenvRegion}", message: "Please provide approval for deployment in ${deployenvRegion} region", ok: 'Deploy')
+                        stage_step="${STAGE_NAME}"
+                        
+                        //separate comp, appProcess, buildFileName and smokeAppProcess
+                        def comp_name=region.split(";")[1]
+                        def applicationProcess=region.split(";")[2]
+                        def buildFileName=region.split(";")[3]
+                        def smokeAppProcess=region.split(";")[4]
+                        
+                        version_id=sh(script:"echo 'AppName${buildFileName}.${BUILD_NUMBER}.${CUR_DATE}'",returnStdout: true).trim()
+                        
+                        deployRegion=getEnvironmentName(deployenvRegion) //get exact ucd env name
+                        
+                        echo "Going to call Deploy shared function to deploy artifact in environment ${deployenvRegion}"
+                        deployFun(comp_name, applicationProcess, buildFileName, deployRegion, auth, warName, earName)
+                        
+                        echo "Going to call SmokeTest shared function to deploy artifact in environment ${deployenvRegion}"
+                        smokeFun(comp_name, smokeAppProcess, auth, deployRegion, version_id)
+                    }catch(Exception e){
+                        catchBlock(To, CC, Subject, appName, stage_step, e, deployenvRegion, UCDProcess, Deploy_status)
+                    }
+                }
+            }
+        ]
+    }
+}
+
+def catchBlock(String To, String CC, String Subject, String appName, String stage_step, Exception e, String DeploymentEnvironment, String UCDProcess, String Deploy_status){
+    Approver=BUILD_USER_ID
+    echo e.toString()
+  if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess="SUCCESS"){
+    echo "${Approver} has aborted in ${DeploymentEnvironment}"
+    Deploy_status="ABORTED"
+    Subject="Deployment Aborted : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
+    echo "${DeploymentEnvironment} deploy status : Aborted"
+    EmailFunction(To, CC, Subject, appName, stage_step, Deploy_status, DeploymentEnvironment)
+  }else if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess="FAILURE"){
+    Deploy_status="FAILURE"
+    Subject="Deployment FAILURE : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
+    echo "${DeploymentEnvironment} deploy status : Failed, current user is ${Approver}"
+    echo "Failed at '${stage_step}' step, ${e}...exiting now..."
+    EmailFunction(To, CC, Subject, appName, stage_step, Deploy_status, DeploymentEnvironment)
+  }else{
+    Deploy_status="FAILURE"
+    Subject="Deployment FAILURE : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
+    echo "${DeploymentEnvironment} deploy status : Failed, current user is ${Approver}"
+    echo "Failed at '${stage_step}' step, ${e}...exiting now..."
+    EmailFunction(To, CC, Subject, appName, stage_step, Deploy_status, DeploymentEnvironment)
+  }
+  throw e
+}
+
+node{
+    def appNme="appName"
+    CUR_DATE=sh(script:'(date +"%d-%m-%y")',returnStdout: true).trim()
+    
 }
