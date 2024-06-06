@@ -1,0 +1,4 @@
+//get UCD EnvName
+def getEnvironmentName(deployEnvName){
+
+}
