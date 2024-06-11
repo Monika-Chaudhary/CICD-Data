@@ -1,4 +1,3 @@
-//get UCD EnvName
 def getEnvironmentName(deployEnvName){
     if(deployEnvName=="envNameA" || deployEnvName=="envNameB"){
         environment="envName1"
@@ -101,4 +100,257 @@ node{
     def warName=""
     def defaultEnvironment=""
     def smokeAppProcess=""
+    
+    stage("Checkout SCM"){
+        try{
+            heckout([$class: 'GitSCM', branches: [[name: 'refs/heads/branchNameWhereJenkinsfile']], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'CleanBeforeCheckout'], [$class: 'WipeWorspace']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'credentials', refspec: '+refs/heads/branchNameWhereJenkinsfile:refs/remotes/origin/branchNameWhereJenkinsfile', url: 'sshUrlWhereJenkinsAndTxtRepo']]])
+              
+            def githubRepoURL =sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$repositoryURL"
+                """
+            )
+            githubRepoURL = githubRepoURL.trim()
+            println(githubRepoURL)
+
+            def branchToPull =sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$branch"
+                """
+            )
+            branchToPull = branchToPull.trim()
+            println(branchToPull)
+
+            def branchName = "refs/heads" + branchToPull
+
+            def branchRefSpec = "refs/heads" + branchToPull + ":refs/remotes/origin" + branchToPull                                
+
+            def credentialsId_App =sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$credentialsId_App"
+                """
+            )
+            credentialsId_App = credentialsId_App.trim()
+            println(credentialsId_App)
+              
+            def Environment =sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$Deployment_Environment"
+                """
+            )
+            
+            To=sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$emailTo"
+                """
+            )
+            To = To.trim()
+            println(To)
+            
+            receipient=sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$approverRecipient"
+                """
+            )
+            receipient = receipient.trim()
+            println(receipient)
+            
+            //code to separate default env and others deployments env
+            for(int i=0;i<Environment.split(",").length;i++){
+                if(i==0){
+                    DefaultDeployEnvironment=Environment.split(",")[i]
+                }
+                else{
+                    DefaultEnvironmentlist=DefaultEnvironmentlist + Environment.split(",")[i] + ","
+                }
+            }
+            
+            echo "Default Deployment Environment: ${DefaultDeployEnvironment}"
+            echo "Rest of deployment environment: ${DefaultEnvironmentlist}"
+            
+            //remove extra comma from extracted deployment string
+            if (DefaultEnvironmentlist!=""){
+                DefaultEnvironmentlist=DeployEnvironmentlist.substring(0,DefaultEnvironmentlist.length() -1)
+            }
+            
+            //code to separate default env, comp, appProcess and smokeAppProcess
+            for(int i=0; i< DefaultDeployEnvironment.split(";").length();i++){
+                if(i==0){
+                    defaultEnvironment=DefaultDeployEnvironment.split(";")[i]
+                }
+                else if(i==1){
+                    comp_name=DefaultDeployEnvironment.split(";")[i]
+                }
+                else if(i==2){
+                    applicationProcess=DefaultDeployEnvironment.split(";")[i]
+                }
+                else if(i==3){
+                    smokeAppProcess=DefaultDeployEnvironment.split(";")[i]
+                }
+                else{
+                    echo "Empty List or Invalid Data"
+                }
+            }
+              
+            checkout([$class: 'GitSCM', branches: [[name: branchName]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'CleanBeforeCheckout'], [$class: 'WipeWorspace']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: credentialsId_App, refspec: branchRefSpec, url: githubRepoURL]]])
+              
+        }catch(Exception e){
+            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+            build_status="FAILURE"
+            echo "${stage_step}"
+            EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+            error "Failed at 'Checkout SCM', exiting now..."
+        }
+    }
+    
+    stage('SAST Analysis with SonarQube'){
+        stage_step="${STAGE_NAME}"
+        try{
+            withEnv(['JAVA_HOME=pathToJDK']) {
+                withSonarQubeEnv('SonarQube'){
+                    withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
+                        sh "sonarScannerPath -e -Dsonar.host.url=IPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                      //-Dsonar.java.binaries=$WORKSPACE/WebContent/WEB-INF/lib
+                    }
+                }  
+            }
+        }catch(Exception e){
+            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+            build_status="FAILURE"
+            echo "${stage_step}"
+            EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+            error "Failed at 'SAST Analysis with SonarQube', exiting now..."
+        }
+    } 
+    
+    stage('JUnit Testing'){
+        stage_step="${STAGE_NAME}"
+        try{
+            withEnv(['JAVA_HOME=pathToJDK']) {
+               sh '$JAVA_HOME/bin/java -version'
+               sh 'antPath -f $WORKSPACE/jacoco-build.xml'
+
+               junit skipPublishingChecks: true, testResults: '**/build/targetFolder/test-reports/*.xml'
+               publishCoverage adapters: [jacocoAdapter('build/targetFolder/site/jacoco/report.xml')], checksName: '', skipPublishingChecks: true, sourceFileResolver: sourceFiles('NEVER_STORE')
+               
+                withSonarQubeEnv('SonarQube'){
+                    withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
+                        sh "sonarScannerPath -e -Dsonar.host.url=IPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.tests=$WORKSPACE/test/ -Dsonar.java.test.libraries=$WORKSPACE/jacoco/lib -Dsonar.core.codeCoveragePlugin=jacoco -Dsonar.junit.reportPaths=$WORKSPACE/build/targetFolder/test-reports -Dsonar.coverage.jacoco.xmlReportPaths=$WORKSPACE/build/targetFolder/site/jacoco/report.xml"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                    }
+                }  
+            }
+        }catch(Exception e){
+            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+            build_status="FAILURE"
+            echo "${stage_step}"
+            EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+            error "Failed at 'JUnit Testing', exiting now..."
+        }
+    } 
+    
+    stage('Compile and Build EAR'){
+        stage_step="${STAGE_NAME}"
+        try{
+            withEnv(['JAVA_HOME=pathToJDK']) {
+                sh '''
+                antPath -f $WORKSPACE/build.xml
+                '''
+            }
+        }catch(Exception e){
+            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+            build_status="FAILURE"
+            echo "${stage_step}"
+            EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+            error "Failed at 'Compile and Build EAR', exiting now..."
+        }
+    }
+    
+    stage('Nexus Upload of Ear Artifact'){
+        stage_step="${STAGE_NAME}"
+        try{
+            withCredentials([string(credentialsId: 'credentialsId', variable: 'nexus')]) {
+               sh '''
+               CUR_DATE=$(date +"%d-%m-%y")
+               DISTINGUISHER="appName"
+               version_id=${DISTINGUISHER}.${BUILD_NUMBER}.${CUR_DATE}
+               packName=${BUILD_NUMBER}.${CUR_DATE}
+               dir_to_fetch=$WORKSPACE/build/target-EAR/
+               mkdir -p $WORKSPACE/${version_id}
+               if[ ! -d $dir_to_fetch ]; then
+                    echo "$dir_to_fetch is not valid directory, Exiting"
+                    exit 1
+               fi
+               cd $dir_to_fetch
+               cnt=`ls -1 *.ear | wc -l`
+               if [ $cnt -ls 1 ]; then
+                    echo "Directory is empty. Nothing to upload, Exiting"
+                    exit 1
+               fi
+               ls -1 | while read filename
+               do
+                    cp -rf ${dir_to_fetch}/${filename} $WORKSPACE/${version_id}
+               done
+               zip -r ${version_id}.zip *
+               chmod 777 ${version_id}.zip
+               curl -v -u admin:${nexus} nexusIpAddr/nexus/content/repositories/repoAppName/${packName} -T ${version_id}.zip    
+               echo "Uploaded ${version_id}.zip to Nexus"
+               '''
+            }
+        }catch(Exception e){
+            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+            build_status="FAILURE"
+            echo "${stage_step}"
+            EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+            error "Failed at 'Nexus Upload of Ear Artifact', exiting now..."
+        }
+    }
+    
+    stage("Default artifact in ${defaultEnvironment}"){
+        try{
+            stage_step="${STAGE_NAME}"
+            def UCDProcess="SUCCESS"    
+            echo "Default env to deploy code : ${defaultEnvironment}"
+            
+            if(DefaultDeployEnvironment.trim().length()>0){
+                envName =getEnvironmentName(defaultEnvironment)
+                
+                echo "comp_name : $comp_name"
+                
+                version_id="${DISTINGUISHER}${buildFileName}.${BUILD_NUMBER}.${CUR_DATE}"
+                echo "calling deploy fun() in default env"
+                appDeploy(comp_name, envName, earName, warName, folderName, applicationProcess, UCDProcess, buildFileName, auth)    //appDeploy - function in shared library for reusability
+                
+                //going to call smoke fun()
+                smokeTest()
+            }
+            else{
+                echo "No env provided as default"
+                build_status="FAILURE"
+            }
+            
+        }catch(Exception e){
+            Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
+            build_status="FAILURE"
+            echo "${stage_step}"
+            EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+            error "Failed at 'Default Deployment(${envName})', exiting now..."
+        }
+    }
+    
+    //send success mail
+    Subject="Build Success : ${JOB_Name} #${BUILD_NUMBER}" 
+    echo "${stage_step}"
+    EmailFunction(To, CC, Subject, appName, stage_step, build_status, envName)
+    
+    //directly pass map of stages to parallel
+    if(DeployEnvironmentlist.trim().length()>0){
+        echo "calling parallel deployment process"
+        echo "receipient: $receipient"
+        DeploymentApproval(receipient,appName,BUILD_URL)
+        
+        echo "deployment envs: ${DeployEnvironmentlist}"
+        parallel getDeployStages(DeployEnvironmentlist.trim(), earName, warName, UCDProcess, To, CC, Subject, appName, build_status, version_id, Deploy_status, deployRegion, auth){
+        echo "All deployment over"
+    }
+    
 }
