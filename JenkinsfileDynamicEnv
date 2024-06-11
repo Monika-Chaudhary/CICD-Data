@@ -81,5 +81,24 @@ def catchBlock(String To, String CC, String Subject, String appName, String stag
 node{
     def appNme="appName"
     CUR_DATE=sh(script:'(date +"%d-%m-%y")',returnStdout: true).trim()
-    
+    def version_id=""
+    def auth=""
+    def To=""
+    def CC=""
+    def Subject=""
+    def receipient=""
+    def build_status="SUCCESS"
+    def Deploy_status="SUCCESS"
+    def Approver="SUCCESS"
+    def EnvironmentList=[]
+    def DeployEnvironmentlist=""
+    def DefaultDeployEnvironment=""
+    def comp_name=""
+    def envName=""
+    def UCDProcess=""
+    def applicationProcess=""
+    def earName=""
+    def warName=""
+    def defaultEnvironment=""
+    def smokeAppProcess=""
 }
