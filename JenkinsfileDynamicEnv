@@ -235,7 +235,8 @@ node{
                
                 withSonarQubeEnv('SonarQube'){
                     withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
-                        sh "sonarScannerPath -e -Dsonar.host.url=IPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.tests=$WORKSPACE/test/ -Dsonar.java.test.libraries=$WORKSPACE/jacoco/lib -Dsonar.core.codeCoveragePlugin=jacoco -Dsonar.junit.reportPaths=$WORKSPACE/build/targetFolder/test-reports -Dsonar.coverage.jacoco.xmlReportPaths=$WORKSPACE/build/targetFolder/site/jacoco/report.xml"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                        sh "sonarScannerPath -e -Dsonar.host.url=IPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.tests=$WORKSPACE/test/ -Dsonar.java.test.libraries=$WORKSPACE/jacoco/lib -Dsonar.core.codeCoveragePlugin=jacoco -Dsonar.junit.reportPaths=$WORKSPACE/build/targetFolder/test-reports -Dsonar.coverage.jacoco.xmlReportPaths=$WORKSPACE/build/targetFolder/site/jacoco/report.xml -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                        //-Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300 these : 2 lines conditions if quality gate failed then will make pipeline failed too
                     }
                 }  
             }
