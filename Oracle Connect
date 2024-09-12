@@ -1,0 +1,45 @@
+Pre-requisite:
+SQL/Oracle client installed over machine to connect with Oracle db
+
+1. Create separate service account in IAGLOBAL domain(Non-Production user account administration)
+
+Description:
+Looking for service account which will be used to trigger automated testing in continuous manner
+
+2. Onboard service account to CyberArk
+Dynamic password (Windows identity services - service accounts)
+
+Description
+This account is intended to run automated testing using IAGLOBAL windows server
+
+3. Oracle - privileged access
+Description 
+Create new table, insert or update data into table of db 
+
+Require static pwd : yes
+
+4. Oracle - privileged access(amend with same request to grant permission over db as admin Except delete)
+Give db name
+Request access : amend
+Type of account: service
+Give schema name
+Description: We are setting up DevOps process which will refresh db automatically. This access we are request to setup that process verification only.
+Required : create/read(select)/update(insert)
+
+5. To give access to SA(no need of dba for this request), login to db with application user and run SQL commands
+
+6. Check access using SQL developer (UI)
+Give username, pwd, port- 1521, hostname, serviceName, role - default (copy pwd from CyberArk, pwd is static type)
+
+7. Connect using cmd
+Connect to machine which has oracle/SQL cmd client installed or install cmd client over local machine
+
+i. Change to oracle user : su - oracle
+ii. Change path : cd /home/oracle
+iii. Execute commands : sqlplus -v (check SQL installed or not or  which version present)
+
+> sqlplus /nolog
+Then SQL prompt open
+SQL > connect serviceAccountOrUsername/"PWD"@hostname/serviceOrDBName
+
+SQL > SELECT * From TableName;
