@@ -55,13 +55,13 @@ def getDeployStages(DeployEnvironmentlist, earName, warName, UCDProcess, To, CC,
 def catchBlock(String To, String CC, String Subject, String appName, String stage_step, Exception e, String DeploymentEnvironment, String UCDProcess, String Deploy_status){
     Approver=BUILD_USER_ID
     echo e.toString()
-  if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess="SUCCESS"){
+  if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess=="SUCCESS"){
     echo "${Approver} has aborted in ${DeploymentEnvironment}"
     Deploy_status="ABORTED"
     Subject="Deployment Aborted : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
     echo "${DeploymentEnvironment} deploy status : Aborted"
     EmailFunction(To, CC, Subject, appName, stage_step, Deploy_status, DeploymentEnvironment)
-  }else if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess="FAILURE"){
+  }else if(e.toString()=="org.jenkinsci.plugins.workflow.steps.FlowInterruptedException" || UCDProcess=="FAILURE"){
     Deploy_status="FAILURE"
     Subject="Deployment FAILURE : ${JOB_Name} #${BUILD_NUMBER} ${DeploymentEnvironment}"
     echo "${DeploymentEnvironment} deploy status : Failed, current user is ${Approver}"
