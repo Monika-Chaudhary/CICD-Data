@@ -209,7 +209,7 @@ node{
             withEnv(['JAVA_HOME=pathToJDK']) {
                 withSonarQubeEnv('SonarQube'){
                     withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
-                        sh "sonarScannerPath -e -Dsonar.host.url=IPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                        sh "sonarScannerPath -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"  // pathTo/sonar-scanner-version/bin/sonar-scanner
                       //-Dsonar.java.binaries=$WORKSPACE/WebContent/WEB-INF/lib
                     }
                 }  
