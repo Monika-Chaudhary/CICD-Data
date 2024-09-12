@@ -1,3 +1,26 @@
+1. Create SQL file over agent machine:
+i. Go to /home/oracle/
+ii. Change user : su - oracle
+iii. vim dbSql.sql
+connect serviceAccountOrUserName/"pwd"@hostName:port/serviceIdOrName
+SELECT * FROM TableOrSchemaName;
+
+2. Create comp process : DBTestDataCreationOrRefreshment
+
+Search 'run sqlplus script' over design box and drag in design page
+
+Config of run sqlplus script:
+
+SqlPlus executable : over agent machine search path of SQL : /oracle/product/12.2.0.1/client_1/bin/SQL
+
+UserName : serviceAccOrUserName
+Password: PWD (if PWD contains @ then enclose PWD in "PWD")
+ConnectionID : hostName:port/serviceId
+SQL Files : dbSql.sql
+Working dir : /home/oracle/
+
+Ok and save
+_____________________________
 1. Create DB_scripts folder in GitHub repo and put all SQL Files on this folder:
  
 i. mySql.sql
