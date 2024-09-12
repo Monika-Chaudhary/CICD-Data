@@ -88,7 +88,7 @@ node{
     def receipient=""
     def build_status="SUCCESS"
     def Deploy_status="SUCCESS"
-    def Approver="SUCCESS"
+    def Approver=BUILD_USER_ID
     def EnvironmentList=[]
     def DeployEnvironmentlist=""
     def DefaultDeployEnvironment=""
