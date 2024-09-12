@@ -1,0 +1,246 @@
+1. Create DB_scripts folder in GitHub repo and put all SQL Files on this folder:
+ 
+i. mySql.sql
+connect &1/"&2"@&3:&4/&5
+Select * FROM tableName;
+
+(Here 1- username or service account, 2- password, 3- host, 4- port 5- serviceName all data comes from config text file except PWD as save password in UCD or safe place)
+
+2. In pipeline : check if sql file then put in deploy folder and call db process
+
+appDeployFunction(envName, compName, applicationProcess, auth, dbApplicationProcess, dbServiceAccount, dbHost, dbPort, dbServiceName, sqlFlag){
+  sh'''
+   export JAVA_HOME=/PATH/TO/JDK
+   Workspace=$PWD
+    export PATH=$PATH:/opt/urbancode/ibm-ucdagent/opt/udclient
+    export compName='''+compName+'''
+    export dbApplicationProcess  ='''+dbApplicationProcess +'''
+    export  dbServiceAccount    ='''+dbServiceAccount+'''
+    export   dbHost ='''+dbHost+'''
+    export   dbPort ='''+dbPort+'''
+    export   dbServiceName      ='''+dbServiceName+'''
+    export  sqlFlag ='''+sqlFlag+'''
+    #export all other variables
+
+    DISTINGUISHER=appName
+    DATE=$(date +"%d-%m-%y")
+    version_id=${DISTINGUISHER}.${BUILD_NUMBER}.${DATE}
+
+   Create directory if not present
+    if [ ! -d /path/to/deploymentFolder ]; then
+      mkdir -p /path/to/deploymentFolder
+    fi
+
+
+    #unzip ear to deploy location
+  
+    if [ $sqlFlag == "Yes" ]; then
+      cp -rf $WORKSPACE/build/targetEar/DB_scripts /path/to/deployment
+    fi
+
+    #create version for UCD component 
+     
+    #upload version files for component 
+
+
+    #calling db UCD process if sql present otherwise not calling UCD db process 
+    if [ $sqlFlag == "Yes" ]; then
+       echo -e "{"> envProp1.json
+        echo -e '"application": "ucdApplicationName",' >> envProp1.json
+        echo -e '"environment": "'$envName'",' >> envProp1.json
+        echo -e '"name": "'dbServiceAccount'",' >> envProp1.json
+        echo -e '"value": "$dbServiceAccount",' >> envProp1.json
+        echo -e "}" >> envProp1.json
+        /opt/urbancode/ibm-ucdagent/opt/udclient/udclient -weburl ucdUrl -authtoken $auth setEnvironmentProperty envProp1.json
+
+     echo -e "{"> envProp2.json
+        echo -e '"application": "ucdApplicationName",' >> envProp2.json
+        echo -e '"environment": "'$envName'",' >> envProp2.json
+        echo -e '"name": "'dbPass'",' >> envProp2.json
+        echo -e '"value": "$dbPass",' >> envProp2.json
+        echo -e "}" >> envProp2.json
+        /opt/urbancode/ibm-ucdagent/opt/udclient/udclient -weburl ucdUrl -authtoken $auth setEnvironmentProperty envProp2.json
+
+    echo -e "{"> envProp3.json
+        echo -e '"application": "ucdApplicationName",' >> envProp3.json
+        echo -e '"environment": "'$envName'",' >> envProp3.json
+        echo -e '"name": "'dbHost'",' >> envProp3.json
+        echo -e '"value": "$dbHost",' >> envProp3.json
+        echo -e "}" >> envProp3.json
+        /opt/urbancode/ibm-ucdagent/opt/udclient/udclient -weburl ucdUrl -authtoken $auth setEnvironmentProperty envProp3.json
+
+
+    echo -e "{"> envProp4.json
+        echo -e '"application": "ucdApplicationName",' >> envProp4.json
+        echo -e '"environment": "'$envName'",' >> envProp4.json
+        echo -e '"name": "'dbPort'",' >> envProp4.json
+        echo -e '"value": "$dbPort",' >> envProp4.json
+        echo -e "}" >> envProp4.json
+        /opt/urbancode/ibm-ucdagent/opt/udclient/udclient -weburl ucdUrl -authtoken $auth setEnvironmentProperty envProp4.json
+
+      echo -e "{"> envProp5.json
+        echo -e '"application": "ucdApplicationName",' >> envProp5.json
+        echo -e '"environment": "'$envName'",' >> envProp5.json
+        echo -e '"name": "'dbServiceName'",' >> envProp5.json
+        echo -e '"value": "$dbServiceName",' >> envProp5.json
+        echo -e "}" >> envProp5.json
+        /opt/urbancode/ibm-ucdagent/opt/udclient/udclient -weburl ucdUrl -authtoken $auth setEnvironmentProperty envProp5.json
+
+       #deploy to $deployEnv environment
+        echo -e "{" > req.Application.json
+     echo -e '"application": "ucdApplicationName",' >> req.Application.json
+echo -e '"description": "Deploying EAR through Jenkins & UCD",' >> req.Application.json
+echo -e '"applicationProcess": "'$applicationProcess'",' >> req.Application.json
+echo -e '"environment": "'$envName'",' >> req.Application.json
+echo -e '"onlyChanged": "false",' >> req.Application.json
+echo -e '"versions": [{' >> req.Application.json
+echo -e '"version": "'$version_id'",' >> req.Application.json
+echo -e '"component": "'$comp_name'",' >> req.Application.json
+echo -e "}]": >> req.Application.json
+echo -e "}" >> req.Application.json
+
+#invoke deployment & get request id
+request_id=$(echo $(udclient -weburl ucdUrl -authtoken $auth requestApplicationProcess - $workspace/req.Application.json) | jq "requestId" | sed 's/"//g')
+echo 'Resuest Id:'
+echo $request_id
+
+#function to check request id status
+getProcessStatus(){
+   udclient -weburl ucdUrl -authtoken $auth getApplicationProcessRequestStatus -request  $request_id
+   grep CLOSED response.json || exit_code=$?
+   if [ "$exit_code" == "" ]; then
+     udclient -weburl ucdUrl -authtoken $auth getApplicationProcessExecution -request  $request_id
+     if grep CLOSED response.json && grep FAULTED response.json;then
+        error "Failed at 'Deploy to $envName environment' step, exiting now...."
+        UCDProcess="FAILURE"
+        exit 1
+        fi
+    else
+       sleep 30; unset exit_code
+       getProcessStatus
+     fi
+}
+#call function to check request id status
+getProcessStatus
+fi
+
+
+#here will be deploy steps
+    
+    
+}
+
+node{
+def sqlCount=0
+def sqlFlag="No"
+
+stage('Checkout Scm'){
+  //Get all db related value from config value
+ checkout(put step)
+}
+
+stage('Compile and Build EAR'){
+  stage_step="${STAGE_NAME}"
+  withEnv(['JAVA_HOME=path/To/javaPath']){
+    sh'''
+    /Path/to/ant -f $WORKSPACE/build.xml
+    '''
+    
+    //Check db scripts present or not, if present then add to build folder
+    sqlCount=sh (script:'(ls $WORKSPACE/DB_scripts/*.sql | wc -l)', returnStdout: true)
+    echo "count of SQL Files in workspace : ${sqlCount}"
+    if( "${sqlCount}.toInteger() == 0 ){
+      echo "no SQL file present"
+    }else if ( "${sqlCount}".toInteger() > 0 ){
+      sh'''
+       mkdir -p $WORKSPACE/build/targetEar/DB_scripts
+       cp $WORKSPACE/DB_scripts/*.sql $WORKSPACE/build/targetEar/DB_scripts/
+       '''
+       sqlFlag="Yes"
+    }
+  }
+}
+
+stage("Deploy"){
+  appDeployFunction(envName, compName, applicationProcess, auth, dbapplicationProcess, dbSeeviceAccount, dbHost, dbPort, dbServiceName, sqlFlag)
+}
+
+
+}
+
+3. Go to UCD application -> environment -> select particular environmental -> environment properties -> add property 
+
+i. Name - dbServiceAccount 
+ii. Name - dbPass
+     Secure - checkbox tick
+     Value - pasteDBPassValueHere
+iii. Name - dbHost
+iv.  Name - dbPort
+v. Name - dbServiceName
+
+
+4. component process :
+Go to particular component -> process -> create process
+
+Name : DBTestDataCreationOrRefreshment 
+Process type : Deployment 
+Inventory status : active
+Default working directory: ${p:resource/work.dir}/${p:component.name}
+
+Design:
+i. Start 
+ii. RemovePreviousDBFiles (shell script)
+
+#!/bin/bash
+if [ -d /home/oracle/appfolder/DB_scripts/ ]; then
+  rm -rf /home/oracle/appfolder/DB_scripts/
+fi
+
+working dir - /home/oracle/appfolder
+  
+iii. Download Artifacts
+Includes : **/*.SQL
+
+Tick on full verification 
+
+Working dir - /home/oracle/appfolder
+
+iv. Shell
+#!/bin/bash
+chown -Rf oracle:oinstall /home/oracle/appfolder
+chmod +x /home/oracle/appfolder/**/*.SQL
+
+working dir - /home/oracle/appfolder
+
+v. Run SQLPlus script
+
+Search 'run sqlplus script' over design box and drag in design page
+
+Config of run sqlplus script:
+
+SqlPlus executable : /u01/app/oracle/product/12.2.0.1/client_1/bin/sql (over agent machine search path of SQL : /oracle/product/12.2.0.1/client_1/bin/sql)
+
+UserName : ${p: environment/dbServiceAccount}
+Password: ${p:environment/dbPass}   (if PWD contains @ then enclose PWD in "PWD")
+ConnectionID :   ${p:environment/dbHostName}:{$p: environment/dbPort}/{p: environment/dbServiceName}
+
+SQL Files : *.sql
+
+SQL Files args :  ${p: environment/dbServiceAccount} "${p: environment/dbPass}" ${p:environment/dbHostName} {$p: environment/dbPort} {p: environment/dbServiceName}
+
+Tick on fail on db messages
+
+Oracle home : /home/oracle/
+
+Working dir : /home/oracle/appfolder/DB_scripts
+
+Ok and save 
+
+5. UCD application process -> drag 
+Install component in design
+
+Component: giveSameComponentNameWhereDBCompProcess
+Use versions without status : active
+Component process : DBTestDataCreationOrRefreshment
+
+Save
