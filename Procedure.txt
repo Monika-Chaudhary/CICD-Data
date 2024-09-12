@@ -1,0 +1,4 @@
+In release reposiory create a folder by .github name. Put CODEOWNERS file under .github folder
+
+#Content of CODEOWNERS file
+* @gitOrgName/teamName
