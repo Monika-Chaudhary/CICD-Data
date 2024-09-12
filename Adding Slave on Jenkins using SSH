@@ -1,0 +1,71 @@
+Pre-requisite:
+1. Save Java version installed on both master and slave machine
+
+Over master:-
+1. Generate ssh keys over /home/jenkins/.ssh (jenkins user)
+> ssh-keygen
+Name of key - slave1436
+
+Over slave:-
+1. Add jenkins user
+> sudo useradd jenkins
+
+2. Give password to this user
+> sudo passwd jenkins
+Enter password now like devOps@123
+
+3. Copy public key content from master server key and paste over slave jenkinsHomeUser [/home/jenkins/.ssh/authorized_keys]
+
+4. Create slaveDir anywhere where we have some space. Suppose create inside /apps then /apps/slaveJenkins96b7/
+
+5. Add Java on this slave dir by adding jvm dir
+/apps/slaveJenkins96b7/jvm/bin/java
+
+Over Jenkins:-
+1. Go to jenkins -> manage jenkins -> manage credentials -> scope-system -> global credentials -> 
+ID - rememberName like machineNameMaster
+Description - machineNameMaster
+Username - jenkins (userToConnect)
+Check - treat username as secret
+Private key - enter private key from master server
+
+
+
+2. Go to jenkins -> manage jenkins -> manage nodes and clouds -> click on '+ New Node' button
+
+Name - machineNameSlave
+Type - permanent agent
+Click on Create 
+
+Give description 
+No. Of executors : 2 or required no.
+Root directory: /apps/slaveJenkins96b7
+Labels : slave1436
+Usage : use this node as much as possible 
+Launch method: launch agent agents via ssh
+Host : machineIp (take slave Ip - hostname -i)
+Add credentials of public one
+Host key verification strategy: non verifying verification strategy 
+Availability: keep this agent online as much as possible 
+Click on Save
+
+3. Go to this node and launch agent
+
+Troubleshooting: 
+
+1. If any Java problem coming then check Java version which must be same as master Java version 
+
+Take required Java package and send over slave machine by SCP command
+ > scp -r /apps/slaveJenkins96b7/jdk jenkins@slaveMachineIp:/apps/slaveJenkins96b7/
+
+(Prompt for password so give password of jenkins user)
+
+
+[scp -r sourceJavePath username@slaveMachineIp:destinationPath ]
+
+2. If any space issue then see free space using command 
+> df -h
+ Then change direction to that directory which has more free space 
+
+On Jenkins node-> go to created node and configuration -> change 
+Root directory: /apps/slaveJenkins96b7 to /another/freeSpaceDir/path
