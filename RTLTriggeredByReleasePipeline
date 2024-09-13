@@ -1,0 +1,68 @@
+/*Check on This project is parameterized
+1. String Parameter
+Name - preProdEnv
+Default Value - PREPROD(RK4-FMO)
+Description - Pre-Prod env name to deploy via UCD
+2. String Parameter
+Name - Version
+Default Value - 
+Description - ArtifactName
+2. String Parameter
+Name - anotherPreProdEnv
+Default Value - 
+Description - Pre-Prod 2nd env name to deploy via UCD
+*/
+
+
+@Library('DevOpsSharedLib')_
+
+def getUCDEnvironmentName(Environment_Name){
+    if("${Environment_Name}" == "PREPROD(PB2-FMO)"){
+        environment="pb2-envName"
+    }
+    else if("${Environment_Name}" == "PREPROD(RK4-FMO)"){
+        environment="rk4-envName"
+    }else{
+        echo "Wrong Environment"
+    }
+    return environment
+}
+
+def deploySmokeRollbackFunction(preProductionEnvironment, comp_Name, envName, ucdApplicationName, applicationProcess, UCDProcess, buildArtifactName, To, CC, Subject, appName, build_status, stageEnv, smokeParamters){
+    echo "Create Snapshot"
+    
+    //Calling Deployment function
+    
+    preProdDeployStatus="true"
+    
+    //stage("SmokeTest"){call Smoke Test Function}
+    
+    //stage("Deployment Rollback for ${preProductionEnvironment}"){call rollback function}
+}
+
+node{
+    
+    def buildArtifactName="$Version"
+    def preProductionEnvironment="$preProdEnv"
+    def anotherPreProdEnv="$anotherPreProdEnv"
+    def envName=""
+    
+    stage("Deployment Pre-Prod to ${preProductionEnvironment}"){
+        echo "Version: $Version"
+        echo "preProductionEnvironment: ${preProdEnv}"
+        envName=getUCDEnvironmentName(preProductionEnvironment)
+        deploySmokeRollbackFunction(preProductionEnvironment, comp_Name, envName, ucdApplicationName, applicationProcess, UCDProcess, buildArtifactName, To, CC, Subject, appName, build_status, stageEnv, smokeParamters)
+    }
+    
+    stage("Deployment Pre-Prod to ${anotherPreProdEnv}"){
+        echo "Version: $Version"
+        echo "anotherPreProdEnv: ${anotherPreProdEnv}"
+        envName=getUCDEnvironmentName(anotherPreProdEnv)
+        deploySmokeRollbackFunction(anotherPreProdEnv, comp_Name, envName, ucdApplicationName, applicationProcess, UCDProcess, buildArtifactName, To, CC, Subject, appName, build_status, stageEnv, smokeParamters)
+    }
+    
+    stage("Prod Deployment"){
+        //prod deployment in parallel with approval mail
+    }
+
+}
