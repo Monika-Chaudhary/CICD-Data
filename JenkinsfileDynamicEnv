@@ -350,7 +350,19 @@ node{
         DeploymentApproval(receipient,appName,BUILD_URL)
         
         echo "deployment envs: ${DeployEnvironmentlist}"
-        parallel getDeployStages(DeployEnvironmentlist.trim(), earName, warName, UCDProcess, To, CC, Subject, appName, build_status, version_id, Deploy_status, deployRegion, auth){
+        try{
+            parallel getDeployStages(DeployEnvironmentlist.trim(), earName, warName, UCDProcess, To, CC, Subject, appName, build_status, version_id, Deploy_status, deployRegion, auth){
+        }catch(Exception e){
+            println(e)
+        }finally{
+            if (Deploy_status == "FAILURE"){
+                currentBuild.result = "FAILURE"
+                currentBuild.rawBuild.@result = husdon.model.Result.FAILURE
+            }else if(Deploy_status == "ABORTED"){
+                currentBuild.result = "FAILURE"
+                currentBuild.rawBuild.@result = husdon.model.Result.SUCCESS
+            }
+        }       
         echo "All deployment over"
     }
     
