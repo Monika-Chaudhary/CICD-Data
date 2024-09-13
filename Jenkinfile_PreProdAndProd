@@ -1,0 +1,16 @@
+/*RTLTriggeredByReleasePipeline
+
+Check on This project is parameterized
+1. String Parameter
+Name - preProdEnv
+Default Value - PREPROD(RK4-FMO)
+Description - Pre-Prod env name to deploy via UCD
+2. String Parameter
+Name - Version
+Default Value - 
+Description - ArtifactName
+2. String Parameter
+Name - anotherPreProdEnv
+Default Value - 
+Description - Pre-Prod 2nd env name to deploy via UCD
+*/
