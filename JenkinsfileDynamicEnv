@@ -362,7 +362,38 @@ node{
                 currentBuild.result = "FAILURE"
                 currentBuild.rawBuild.@result = husdon.model.Result.SUCCESS
             }
-        }       
+        } 
+
+        try{
+            stage('Approval to trigger RTL Pipeline'){
+                def envToDeployIntoPreprod =""
+                CUR_DATE=sh(script:'(date +"%d-%m-%y")',returnStdout: true).trim()
+                def buildArtifactId="${BUILD_NUMBER}.${CUR_DATE}"  //from Nexus get artifact Name
+                def preProdEnv=""
+                def anotherPreProdEnv=""
+                
+                approvalMap = input id: 'TriggerRTLPipeline', message: "Provide approval to trigger the RTL pipeline with build artifact: ${buildArtifactId}", ok: 'Deploy to Pre-Prod Environment', parameters: [choice(choices: ['PREPROD(RK4-FMO)', 'PREPROD(PB2-FMO)'], description: 'Select Pre-Prod Environment', name: 'envToDeployIntoPreprod')], submitter: 'GitOrgName*TeamName'
+                println("approvalMap:" + approvalMap)
+                
+                println("Approved to deploy RTL")
+                envToDeployIntoPreprod ="$approvalMap"
+                println("envToDeployIntoPreprod : "+envToDeployIntoPreprod)
+                
+                if("${envToDeployIntoPreprod}" == "PREPROD(RK4-FMO)"){
+                    anotherPreProdEnv="PREPROD(PB2-FMO)"
+                }else if("${envToDeployIntoPreprod}" == "PREPROD(PB2-FMO)"){
+                    anotherPreProdEnv="PREPROD(RK4-FMO)"
+                }else{
+                    echo "Wrong Pre-Prod Environment"
+                }
+                
+                println("Another Pre-Prod Env: "+ anotherPreProdEnv)
+                build job: 'JenkinsFolderName/JenkinsJobName', wait:false, parameters: [[$class: 'StringParameterValue',name:'preProdEnv',value:"$envToDeployIntoPreprod"],[$class: 'StringParameterValue',name:'Version',value:"$buildArtifactId"],[$class: 'StringParameterValue',name:'anotherPreProdEnv',value:"$anotherPreProdEnv"]]
+            }
+        }catch(Exception e){
+            println(e)
+        } 
+
         echo "All deployment over"
     }
     
