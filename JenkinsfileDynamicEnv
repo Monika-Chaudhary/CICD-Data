@@ -1,3 +1,6 @@
+@Library('DevOpsSharedLib')_
+
+//get UCD EnvName
 def getEnvironmentName(deployEnvName){
     if(deployEnvName=="envNameA" || deployEnvName=="envNameB"){
         environment="envName1"
@@ -266,11 +269,11 @@ node{
 
                     if [ "${SonarQualityGate}" == "enable" ]; then
                         echo "Sonar Quality Gate Enabled"
-                        sonarScannerPath/bin/sonar-scanner -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login="$sonarpass" -Dsonar.projectName='sonarProjectName' -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                        /sonarScannerPath/bin/sonar-scanner -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login="$sonarpass" -Dsonar.projectName='sonarProjectName' -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"  // pathTo/sonar-scanner-version/bin/sonar-scanner
                       //-Dsonar.java.binaries=$WORKSPACE/WebContent/WEB-INF/lib
                     elif [ "${SonarQualityGate}" == "disable" ]; then
                         echo "Sonar Quality Gate disabled"
-                        sonarScannerPath/bin/sonar-scanner -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login="$sonarpass" -Dsonar.projectName='sonarProjectName' -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/
+                        /sonarScannerPath/bin/sonar-scanner -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login="$sonarpass" -Dsonar.projectName='sonarProjectName' -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/
                     else
                         echo "Value must be either enable or disable"
                     fi
@@ -317,8 +320,21 @@ node{
         try{
             withEnv(['JAVA_HOME=pathToJDK']) {
                 sh '''
-                antPath -f $WORKSPACE/build.xml
+                /antPath/bin/ant -f $WORKSPACE/build.xml
                 '''
+
+                //Check DB Scripts present or not, if present then add to BuildFolder
+                sqlCount=sh(script:'(ls $WORKSPACE/DB_scriptsFolder/*.sql | wc -l)',returnStdout: true)
+                echo "Count of SQL files in workspace: ${sqlCount}"
+                if( "${sqlCount}".toInteger() == 0 ){
+                    echo "No SQL file present"
+                }else if( "${sqlCount}".toInteger() > 0 ){
+                    sh'''
+                    mkdir -p $WORKSPACE/build/target-EAR/DB_scriptsFolder
+                    cp $WORKSPACE/DB_scriptsFolder/*.sql $WORKSPACE/build/target-EAR/DB_scriptsFolder
+                    '''
+                    sqlFlag="Yes"
+                }
             }
         }catch(Exception e){
             Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
@@ -333,11 +349,12 @@ node{
         stage_step="${STAGE_NAME}"
         try{
             withCredentials([string(credentialsId: 'credentialsId', variable: 'nexus')]) {
+               buildArtifactId="${BUILD_NUMBER}.${CUR_DATE}"
                sh '''
                CUR_DATE=$(date +"%d-%m-%y")
-               DISTINGUISHER="appName"
+               DISTINGUISHER=appName
                version_id=${DISTINGUISHER}.${BUILD_NUMBER}.${CUR_DATE}
-               packName=${BUILD_NUMBER}.${CUR_DATE}
+               packName='''+buildArtifactId+'''
                dir_to_fetch=$WORKSPACE/build/target-EAR/
                mkdir -p $WORKSPACE/${version_id}
                if[ ! -d $dir_to_fetch ]; then
@@ -356,7 +373,7 @@ node{
                done
                zip -r ${version_id}.zip *
                chmod 777 ${version_id}.zip
-               curl -v -u admin:${nexus} nexusIpAddr/nexus/content/repositories/repoAppName/${packName} -T ${version_id}.zip    
+               curl -v -u admin:${nexus} http://nexusIpAddr/nexus/content/repositories/repoAppName/${packName} -T ${version_id}.zip    
                echo "Uploaded ${version_id}.zip to Nexus"
                '''
             }
@@ -368,11 +385,12 @@ node{
             error "Failed at 'Nexus Upload of Ear Artifact', exiting now..."
         }
     }
-    
+
+    defaultDeployStatus="false"
     stage("Default artifact in ${defaultEnvironment}"){
         try{
             stage_step="${STAGE_NAME}"
-            def UCDProcess="SUCCESS"    
+            UCDProcess="SUCCESS"    
             echo "Default env to deploy code : ${defaultEnvironment}"
             
             if(DefaultDeployEnvironment.trim().length()>0){
@@ -381,6 +399,10 @@ node{
                 echo "comp_name : $comp_name"
                 
                 version_id="${DISTINGUISHER}${buildFileName}.${BUILD_NUMBER}.${CUR_DATE}"
+
+                //create snapshot before deployment
+                createSnapshot(envName, auth, ucdApplicationName, '', To, appName, stage_step)
+
                 echo "calling deploy fun() in default env"
                 appDeploy(comp_name, envName, earName, warName, folderName, applicationProcess, UCDProcess, buildFileName, auth)    //appDeploy - function in shared library for reusability
                 
