@@ -80,6 +80,7 @@ def catchBlock(String To, String CC, String Subject, String appName, String stag
 node{
     def appNme="appName"
     CUR_DATE=sh(script:'(date +"%d-%m-%y")',returnStdout: true).trim()
+    def DISTINGUISHER="appName"
     def version_id=""
     def auth=""
     def To=""
@@ -92,14 +93,37 @@ node{
     def EnvironmentList=[]
     def DeployEnvironmentlist=""
     def DefaultDeployEnvironment=""
+    def Manual_Testing="" 
+    def Automated_Testing=""
     def comp_name=""
     def envName=""
     def UCDProcess=""
     def applicationProcess=""
     def earName=""
     def warName=""
+    def folderName=""
     def defaultEnvironment=""
     def smokeAppProcess=""
+    def wasSysOutLog=""
+    def wasSysOutLogJ2=""
+    def wasSysOutLogJ3=""
+    def wasSysOutLogJ4=""
+    def appTimerLog=""
+    def envLog=""
+    def repositoryUrlInfo="" 
+    def branchInfo="" 
+    def file_pathinfo=""
+    def deployRegion=""
+    def sqlCount=0
+    def dbServiceAccount=""
+    def dbHost="" 
+    def dbPort="" 
+    def dbServiceName="" 
+    def dbApplicationProcess=""
+    def sqlFlag="No"
+    def ucdApplicationName=""
+    def buildArtifactId=""
+    def SonarQualityGate=""
     
     stage("Checkout SCM"){
         try{
@@ -138,6 +162,26 @@ node{
                 echo "\$Deployment_Environment"
                 """
             )
+
+            Manual_Testing =sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$Manual_Testing"
+                """
+            )
+
+            Automated_Testing =sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$Automated_Testing"
+                """
+            )
+
+            auth =sh(returnStdout:true, script: """
+                source \$WORKSPACE/xyztxtFile.txt
+                echo "\$authUCDToken"
+                """
+            )
+            auth = auth.trim()
+            println(auth)
             
             To=sh(returnStdout:true, script: """
                 source \$WORKSPACE/xyztxtFile.txt
@@ -154,6 +198,8 @@ node{
             )
             receipient = receipient.trim()
             println(receipient)
+
+            //get repositoryUrlInfo, branchInfo, file_pathinfo, dbServiceAccount, dbHost, dbPort, dbServiceName, dbApplicationProcess, ucdApplicationName and SonarQualityGate in same way
             
             //code to separate default env and others deployments env
             for(int i=0;i<Environment.split(",").length;i++){
@@ -185,12 +231,17 @@ node{
                     applicationProcess=DefaultDeployEnvironment.split(";")[i]
                 }
                 else if(i==3){
+                    buildFileName=DefaultDeployEnvironment.split(";")[i]
+                }
+                else if(i==4){
                     smokeAppProcess=DefaultDeployEnvironment.split(";")[i]
                 }
                 else{
                     echo "Empty List or Invalid Data"
                 }
             }
+
+            //echo defaultEnvironment, comp_name, applicationProcess, buildFileName and smokeAppProcess for debug purpose
               
             checkout([$class: 'GitSCM', branches: [[name: branchName]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'CleanBeforeCheckout'], [$class: 'WipeWorspace']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: credentialsId_App, refspec: branchRefSpec, url: githubRepoURL]]])
               
@@ -206,12 +257,24 @@ node{
     stage('SAST Analysis with SonarQube'){
         stage_step="${STAGE_NAME}"
         try{
-            withEnv(['JAVA_HOME=pathToJDK']) {
-                withSonarQubeEnv('SonarQube'){
-                    withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
-                        sh "sonarScannerPath -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+            withSonarQubeEnv('SonarQube'){
+                withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
+                    echo "SonarQualityGate-> $SonarQualityGate"
+                    sh '''
+                    export SonarQualityGate='''+SonarQualityGate+'''
+                    export sonarpass='''+sonarpass+'''
+
+                    if [ "${SonarQualityGate}" == "enable" ]; then
+                        echo "Sonar Quality Gate Enabled"
+                        sonarScannerPath/bin/sonar-scanner -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login="$sonarpass" -Dsonar.projectName='sonarProjectName' -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"  // pathTo/sonar-scanner-version/bin/sonar-scanner
                       //-Dsonar.java.binaries=$WORKSPACE/WebContent/WEB-INF/lib
-                    }
+                    elif [ "${SonarQualityGate}" == "disable" ]; then
+                        echo "Sonar Quality Gate disabled"
+                        sonarScannerPath/bin/sonar-scanner -e -Dsonar.host.url=sonarQubeIPAddr -Dsonar.login="$sonarpass" -Dsonar.projectName='sonarProjectName' -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/
+                    else
+                        echo "Value must be either enable or disable"
+                    fi
+                    '''
                 }  
             }
         }catch(Exception e){
@@ -232,14 +295,14 @@ node{
 
                junit skipPublishingChecks: true, testResults: '**/build/targetFolder/test-reports/*.xml'
                publishCoverage adapters: [jacocoAdapter('build/targetFolder/site/jacoco/report.xml')], checksName: '', skipPublishingChecks: true, sourceFileResolver: sourceFiles('NEVER_STORE')
-               
+             }
                 withSonarQubeEnv('SonarQube'){
                     withCredentials([string(credentialsId: 'credentialsId', variable: 'sonarpass')]) {
-                        sh "sonarScannerPath -e -Dsonar.host.url=IPAddr -Dsonar.login=admin -Dsonar.password='$sonarpass' -Dsonar.projectName=sonarProjectName -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.source=1.8 -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.tests=$WORKSPACE/test/ -Dsonar.java.test.libraries=$WORKSPACE/jacoco/lib -Dsonar.core.codeCoveragePlugin=jacoco -Dsonar.junit.reportPaths=$WORKSPACE/build/targetFolder/test-reports -Dsonar.coverage.jacoco.xmlReportPaths=$WORKSPACE/build/targetFolder/site/jacoco/report.xml -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300"  // pathTo/sonar-scanner-version/bin/sonar-scanner
+                        sh "sonarScannerPath/bin/sonar-scanner -e -Dsonar.host.url=IPAddr -Dsonar.login='$sonarpass' -Dsonar.projectName='sonarProjectName' -Dsonar.projectVersion=1.0 -Dsonar.language=java -Dsonar.projectKey=sonarProjectKey -Dsonar.sources=$WORKSPACE/src -Dsonar.java.binaries=$WORKSPACE/ -Dsonar.tests=$WORKSPACE/test/ -Dsonar.java.test.libraries=$WORKSPACE/jacoco/lib -Dsonar.core.codeCoveragePlugin=jacoco -Dsonar.junit.reportPaths=$WORKSPACE/build/targetFolder/test-reports -Dsonar.coverage.jacoco.xmlReportPaths=$WORKSPACE/build/targetFolder/site/jacoco/report.xml"  // pathTo/sonar-scanner-version/bin/sonar-scanner
                         //-Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300 these : 2 lines conditions if quality gate failed then will make pipeline failed too
                     }
                 }  
-            }
+           
         }catch(Exception e){
             Subject="Build Failure : ${JOB_Name} #${BUILD_NUMBER}"  
             build_status="FAILURE"
